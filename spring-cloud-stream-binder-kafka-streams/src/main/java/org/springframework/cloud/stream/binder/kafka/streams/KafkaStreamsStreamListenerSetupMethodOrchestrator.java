@@ -43,6 +43,7 @@ import org.apache.kafka.streams.state.Stores;
 
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanInitializationException;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
@@ -52,6 +53,7 @@ import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.cloud.stream.binder.ConsumerProperties;
 import org.springframework.cloud.stream.binder.kafka.properties.KafkaConsumerProperties;
 import org.springframework.cloud.stream.binder.kafka.streams.annotations.KafkaStreamsStateStore;
+import org.springframework.cloud.stream.binder.kafka.streams.annotations.StreamsBuilderFactoryBeanCustomizer;
 import org.springframework.cloud.stream.binder.kafka.streams.properties.KafkaStreamsConsumerProperties;
 import org.springframework.cloud.stream.binder.kafka.streams.properties.KafkaStreamsExtendedBindingProperties;
 import org.springframework.cloud.stream.binder.kafka.streams.properties.KafkaStreamsStateStoreProperties;
@@ -268,8 +270,15 @@ class KafkaStreamsStreamListenerSetupMethodOrchestrator
 					StreamsBuilder streamsBuilder = streamsBuilderFactoryBean.getObject();
 					KafkaStreamsConsumerProperties extendedConsumerProperties = this.kafkaStreamsExtendedBindingProperties
 							.getExtendedConsumerProperties(inboundName);
+
 					// get state store spec
 					KafkaStreamsStateStoreProperties spec = buildStateStoreSpec(method);
+					StreamsBuilderFactoryBeanCustomizer streamsBuilderFactoryBeanConfigurer =
+							createStreamsBuilderFactoryBeanConfigurer(method);
+					if (streamsBuilderFactoryBeanConfigurer != null) {
+						streamsBuilderFactoryBeanConfigurer.customize(streamsBuilderFactoryBean);
+					}
+
 					Serde<?> keySerde = this.keyValueSerdeResolver
 							.getInboundKeySerde(extendedConsumerProperties);
 					Serde<?> valueSerde = this.keyValueSerdeResolver.getInboundValueSerde(
@@ -471,6 +480,7 @@ class KafkaStreamsStreamListenerSetupMethodOrchestrator
 				LOG.info("state store " + storeBuilder.name() + " added to topology");
 			}
 		}
+
 		String[] bindingTargets = StringUtils.commaDelimitedListToStringArray(
 				this.bindingServiceProperties.getBindingDestination(inboundName));
 
@@ -681,6 +691,15 @@ class KafkaStreamsStreamListenerSetupMethodOrchestrator
 			}
 		}
 		return null;
+	}
+
+	private StreamsBuilderFactoryBeanCustomizer createStreamsBuilderFactoryBeanConfigurer(Method method) {
+		try {
+			return applicationContext.getBean(StreamsBuilderFactoryBeanCustomizer.class);
+		}
+		catch (NoSuchBeanDefinitionException ex) {
+			return null;
+		}
 	}
 
 }
